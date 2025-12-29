@@ -143,6 +143,23 @@ const UploadIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const QrCodeIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect x="3" y="3" width="7" height="7"></rect>
+    <rect x="14" y="3" width="7" height="7"></rect>
+    <rect x="14" y="14" width="7" height="7"></rect>
+    <rect x="3" y="14" width="7" height="7"></rect>
+  </svg>
+);
+
+const AlertTriangleIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+    <path d="M12 9v4" />
+    <path d="M12 17h.01" />
+  </svg>
+);
+
 // --- Types ---
 type Step = 'setup' | 'participants' | 'results';
 type Language = 'zh' | 'en';
@@ -264,6 +281,12 @@ const i18n = {
     savedAt: "保存于",
     groupColumn: "分组",
     close: "关闭",
+    qrBtn: "分享二维码",
+    qrTitle: "分享分组结果",
+    qrHint: "使用手机扫描上方二维码即可获取分组结果文本。",
+    qrLoading: "正在生成二维码...",
+    qrTooManyParticipants: "人数过多，无法生成二维码",
+    qrTooManyHint: "当人数超过80人时，生成的二维码过于复杂难以识别。\n建议使用“打印/PDF”或“导出Excel”功能分享结果。",
   },
   en: {
     appTitle: "EasyDraw",
@@ -333,6 +356,12 @@ const i18n = {
     savedAt: "Saved",
     groupColumn: "Group",
     close: "Close",
+    qrBtn: "Share QR",
+    qrTitle: "Share Results",
+    qrHint: "Scan the QR code to get the text result on your phone.",
+    qrLoading: "Generating QR Code...",
+    qrTooManyParticipants: "Too many participants",
+    qrTooManyHint: "QR codes are not generated for more than 80 participants to ensure readability.\nPlease share via Print/PDF or Export Excel.",
   }
 };
 
@@ -409,6 +438,84 @@ function DrawingAnimation({
                     className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-75 ease-out"
                     style={{ width: `${Math.min(progress, 100)}%` }}
                 ></div>
+            </div>
+        </div>
+    );
+}
+
+function QrModal({
+    isOpen,
+    onClose,
+    config,
+    groups,
+    t
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    config: TournamentConfig;
+    groups: Group[];
+    t: (key: keyof typeof i18n.en) => string;
+}) {
+    if (!isOpen) return null;
+
+    const isOverLimit = config.participantCount > 80;
+
+    // Generate text content for the QR Code
+    const generateTextContent = () => {
+        let text = `${config.name}\n${t('drawResults')}\n----------------\n`;
+        groups.forEach(group => {
+            text += `[${group.name}] (${group.participants.length})\n`;
+            group.participants.forEach((p, idx) => {
+                const name = p.values[config.primaryFieldId] || '-';
+                text += `${idx + 1}. ${name}\n`;
+            });
+            text += `\n`;
+        });
+        return text;
+    };
+
+    const qrUrl = !isOverLimit 
+        ? `https://api.2dcode.biz/v1/create-qr-code?data=${encodeURIComponent(generateTextContent())}&size=400x400`
+        : '';
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-6 animate-scale-in flex flex-col items-center" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 text-center">
+                    {t('qrTitle')}
+                </h3>
+                
+                <div className="bg-white p-2 rounded-lg border border-gray-200 shadow-inner mb-4 min-h-[256px] flex items-center justify-center w-full">
+                    {isOverLimit ? (
+                         <div className="flex flex-col items-center text-center p-2">
+                             <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-full mb-3">
+                                 <AlertTriangleIcon className="w-8 h-8 text-yellow-500" />
+                             </div>
+                             <p className="font-bold text-gray-800 dark:text-gray-200 mb-2">{t('qrTooManyParticipants')}</p>
+                             <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-line">{t('qrTooManyHint')}</p>
+                         </div>
+                    ) : (
+                        <img 
+                            src={qrUrl} 
+                            alt="QR Code" 
+                            className="w-64 h-64 object-contain"
+                            loading="lazy"
+                        />
+                    )}
+                </div>
+
+                {!isOverLimit && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6">
+                        {t('qrHint')}
+                    </p>
+                )}
+
+                <button 
+                    onClick={onClose}
+                    className="w-full py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
+                >
+                    {t('close')}
+                </button>
             </div>
         </div>
     );
@@ -500,7 +607,7 @@ function HistoryModal({
 function SetupStep({ 
   config, 
   onConfigChange, 
-  onNext,
+  onNext, 
   onImport,
   t
 }: { 
@@ -797,13 +904,7 @@ function ParticipantsStep({
     const newParticipants = participants.map(p => {
         const newValues: Record<string, string> = {};
         config.fields.forEach(f => {
-            if (f.id === config.primaryFieldId) {
-                newValues[f.id] = `${t(config.type === 'individual' ? 'playerPrefix' : 'teamPrefix')} ${p.id}`;
-            } else {
-                 if (f.label.includes('School') || f.label.includes('学校')) newValues[f.id] = `School ${String.fromCharCode(65 + Math.floor(Math.random() * 5))}`;
-                 else if (f.label.includes('Topic') || f.label.includes('题目')) newValues[f.id] = `Topic ${Math.floor(Math.random() * 10) + 1}`;
-                 else newValues[f.id] = `-`;
-            }
+            newValues[f.id] = `${f.label} ${p.id}`;
         });
         return { ...p, values: newValues };
     });
@@ -974,6 +1075,7 @@ function ResultsStep({
 }) {
     const componentRef = useRef<HTMLDivElement>(null);
     const [isExporting, setIsExporting] = useState(false);
+    const [showQr, setShowQr] = useState(false);
 
     const handlePrint = () => {
         window.print();
@@ -1026,6 +1128,14 @@ function ResultsStep({
 
     return (
         <div className="max-w-6xl mx-auto animate-fade-in" ref={componentRef}>
+             <QrModal 
+                isOpen={showQr}
+                onClose={() => setShowQr(false)}
+                config={config}
+                groups={groups}
+                t={t}
+             />
+
              <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 no-print">
                 <div>
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{t('drawResults')}</h2>
@@ -1061,6 +1171,12 @@ function ResultsStep({
                         className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium shadow-md transition-colors flex items-center gap-2"
                     >
                         <RefreshIcon className="w-4 h-4" /> {t('redrawBtn')}
+                    </button>
+                    <button 
+                        onClick={() => setShowQr(true)}
+                        className="px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-lg font-medium shadow-md transition-colors flex items-center gap-2"
+                    >
+                        <QrCodeIcon className="w-4 h-4" /> {t('qrBtn')}
                     </button>
                     <button 
                         onClick={onExportJSON}
@@ -1421,9 +1537,7 @@ const App = () => {
         <nav className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 no-print transition-colors">
             <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <div className="bg-blue-600 p-1.5 rounded-lg">
-                        <TrophyIcon className="text-white w-5 h-5" />
-                    </div>
+                    <img src="./logo.png" alt="Logo" className="w-9 h-9 object-contain" />
                     <span className="font-bold text-xl text-gray-900 dark:text-white tracking-tight">{t('appTitle')}</span>
                 </div>
                 
